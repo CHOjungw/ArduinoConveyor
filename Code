@@ -1,0 +1,220 @@
+#include <Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <HX711.h>
+#include <Stepper.h>
+
+
+#define DAT  4    // DAT와 SCK는 Load Cell을 제어하기위한 핀 번호 지정
+#define SCK  2
+#define S0 47  // 스텝모터를 제어하기위한 핀 번호 지정
+#define S1 49
+#define S2 51
+#define S3 53
+
+Servo myservo1;  // 2공정의 서보모터와 3공정의 서보모터를 제어하기위한 변수지정
+Servo myservo2;
+int servoPin1 = 9; // 서보모터의 핀번호 지정
+int servoPin2 = 5;
+int angle = 0;  // 서보모터의 각도 지정을 위해 0으로 초기화
+int sensor = A5;
+const int enA = 11; // DC모터의 속도제어를 위한 핀번호 지정
+const int enB = 10;
+int i; // 변수 i를 지정
+LiquidCrystal_I2C lcd (0x27,16,2); // LCD 객체선언 
+
+HX711 scale(DAT, SCK); // HX711 모듈을 제어하기위한 변수지정 
+Stepper myStepper(200,IN1,IN2,IN3,IN4); // 스텝모터의 속도와 모듈제어
+
+float calibration_factor = 8875.0; // HX711 미세무게 측정을 위한 교정 계수
+
+void setup() {
+  pinMode(sensor,INPUT);  // pinMode 함수는 핀 번호를 받아서 그 핀을 입력으로 사용하는 함수이다. 
+  lcd.init();      //  LCD 모듈을 초기화 하기위한 함수
+  lcd.backlight();  // LCD의 백라이트를 기동하는 함수
+  scale.set_scale(); // HX711의 scale을 지정
+  scale.tare(5); // scale 설정
+  float zero_factor = scale.read_average(); // 읽은 스케일의 평균값을 반환
+  Serial.print("Zero factor: "); // 시리얼 모니터에 Zero factor의 값을 표시
+  Serial.println(zero_factor); 
+  myStepper.setSpeed(60); // 스텝모터의 속도를 지정
+  myservo1.attach(9);  // 서보모터와 연결된 디지털 핀 번호를 설정 
+  myservo2.attach(5); 
+  
+  pinMode(A0, OUTPUT);   // 아날로그 핀 번호를 출력으로 설정
+  pinMode(A1, OUTPUT);
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  Serial.begin(9600); // 시리얼 통신의 보트레이트를 9600으로 설정 
+ 
+   lcd.setCursor(0,0); // LCD의 첫줄 설정
+  lcd.print("Waiting...");
+  lcd.setCursor(0,1); // LCD의 두 번째 줄 설정
+  lcd.print("Searching Weight");  
+}
+
+void loop() {
+char read_data; // char 변수는 정수형이며 8비트의 숫자 범위에서 read_data값을 처리
+int data = digitalRead(sensor); // 적외선 센서의 값을 받아서 date에 저장
+Serial.println(data); // date 값을 시리얼 모니터에 출력
+delay(1000); // 1초 기다림
+
+
+ if(data==0) // data 값은 적외선 센서를 통해서 들어온 값으로 0 은 물체가 인식되었다는 것이다.
+{
+ digitalWrite(A0, HIGH);   // 핀 A0, A1의 출력을 HIGH로 전압을 공급
+ digitalWrite(A1, HIGH);  
+ analogWrite(enA, 150); // enA, enB의 출력을 150으로 설정하여 DC모터 속도를 조절
+ analogWrite(enB, 150);
+ digitalWrite(A0, LOW);   // 물체의 이동이 끝난 이후 A0,A1의 출력을 0으로 만들어 DC모터의 동작을 정지
+ digitalWrite(A1, LOW);   
+  
+
+
+ scale.set_scale(calibration_factor); // HX711 교정계수를 scale 값에 지정
+ Serial.print("Reading: "); 
+ Serial.print((scale.get_units()*0.453592)*10); // 시리얼 모니터에 kg으로 환산한 측정값 에 *10배를 취하여 출력
+  float weight = (scale.get_units()*0.453592)*10 ; // weight 변수를 측정값에 대입
+  Serial.print(" kg"); // kg으로 환산한 측정값을 시리얼 모니터에 출력
+
+
+ lcd.init(); // LCD 모듈을 초기화 
+ lcd.backlight(); 
+ lcd.setCursor(0,0); // LCD의 첫줄  설정
+ lcd.print("Weight:   "); 
+ lcd.print(weight); // LCD에 weight에 저장된 수치를 표시
+ lcd.setCursor(0,1); // LCD의 두 번째 줄 설정
+ lcd.print("Divide Area..");
+
+
+
+if(weight<=5) // weight의 수치가 5이하일 경우
+  {lcd.init(); // LCD 초기화
+  lcd.backlight(); 
+  lcd.setCursor(0,0);
+  lcd.print("Weight:    ");
+  lcd.print(weight); // weight의 수치를 LCD에 표시
+  lcd.setCursor(0,1);
+  lcd.print("Area : A"); // 구역 A을 표시
+}
+ else if(weight>5 && weight<=10) // weight 값이 5초과 10이하 일 경우 
+{
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("Weight:   ");
+  lcd.print(weight);
+  lcd.setCursor(0,1);
+  lcd.print("Area : B"); // 구역 B를 표시
+}
+ else if(weight>10) // weight 값이 10초과일 경우 
+{ 
+   lcd.init();
+   lcd.backlight();
+   lcd.setCursor(0,0);
+   lcd.print("Weight:    ");
+   lcd.print(weight);
+   lcd.setCursor(0,1);
+   lcd.print("Area : C"); // 구역 C를 표시
+}
+
+  delay(1000); // 1초 기다림
+
+if 문과 LCD를 통해 구역을 분배하고 2공정에서 3공정으로 물건을 이동시키기 위해 서보모터1을 동작한다.
+
+   for(angle = 0; angle < 120; angle++)  // for문을 통하여 위에서 지정한 angle각을 0에서 120까지 순차적으로 증가
+  { 
+    myservo1.write(angle); // 서보모터1의 각을 0~120만큼 증가
+    delay(15); 
+  } 
+  for(angle = 120; angle > 0; angle--) // for문을 통하여 위에서 지정한 angle각을 120에서 0까지 순차적으로 감소
+  { 
+    myservo1.write(angle);  // 서보모터2의 각을 120~0까지 감소
+    delay(15); 
+  }
+  delay(2500); // 안정적인 안착확인 위해 2.5초 기다림
+
+
+
+if(weight<=5) // weight가 5이하일 경우
+
+ {
+Serial.print(weight); // 시리얼 모니터에 weight 수치를 표시
+   for(i=0;i<200;i++)  // for문을 통해 0에서 200으로 순차적 증가 (200=1회전 설정)
+  {
+    myStepper.step(1);  // 스텝모터 정회전
+    delay(10);           
+  }
+    delay(100); 
+     for(angle = 45; angle > 0; angle--) // for문을 통해 angle각을 45에서 0으로 순차적으로 감소(동작)
+  { 
+    myservo2.write(angle); // 서보모터2의 각도를 45에서 0도로 순차적으로 이동
+    delay(30); 
+  }
+  delay(100);
+     for(angle = 0; angle < 45; angle++) // for문을 통해 angle각을 0에서 45으로 순차적으로 증가(복귀)
+  { 
+    myservo2.write(angle); // 서보모터2의 각도를 0에서 45도로 순차적으로 이동
+    delay(30); 
+  }
+  delay(2500);       
+    for(i=0;i<200;i++)  
+  {
+    myStepper.step(-1); // 스텝모터 역회전 
+    delay(10);}             
+ }
+ else if(weight>5 && weight<=10 ) // weight가 5초과 10이하 이하
+ {
+  Serial.print(weight); // 시리얼 모니터에 weight 표시 
+  for(i=0;i<600;i++) // 스텝모터 0에서 600까지 순차적으로 증가 (600=3회전)
+  {
+    myStepper.step(1); // 스텝모터 정회전
+    delay(10);            
+  }     
+    delay(100);   
+     for(angle = 45; angle > 0; angle--) // for문을 통해 angle각을 45에서 0으로 순차적으로 감소(동작)
+  { 
+    myservo2.write(angle); // 서보모터2의 각도를 45에서 0도로 순차적으로 이동
+    delay(15); 
+  }
+     for(angle = 0; angle < 45; angle++) // for문을 통해 angle각을 0에서 45으로 순차적으로 증가(복귀)
+  { 
+    myservo2.write(angle); // 서보모터2의 각도를 0에서 45도로 순차적으로 이동
+    delay(15); 
+  } 
+  delay(2500);        
+   for(i=0;i<600;i++)     
+  {
+    myStepper.step(-1); // 스텝모터 역회전
+    delay(10);          
+  }
+ }
+  
+else if(weight>10 ) // weight가 10초과
+ {
+  Serial.print(weight);
+    for(i=0;i<800;i++) // 스텝모터 0에서 800까지 순차적으로 증가 (800=4회전)  
+  {
+    myStepper.step(1);  // 스텝모터 정회전
+    delay(10);           
+  }        
+    delay(100);   
+     for(angle = 45; angle > 0; angle--) // for문을 통해 angle각을 45에서 0으로 순차적으로 감소(동작)
+  { 
+    myservo2.write(angle);  서보모터2의 각도를 45에서 0도로 순차적으로 이동
+    delay(15); 
+  }
+     for(angle = 0; angle < 45; angle++) // for문을 통해 angle각을 0에서 45으로 순차적으로 증가(복귀)
+  { 
+    myservo2.write(angle);  서보모터2의 각도를 0에서 45도로 순차적으로 이동
+    delay(15);  
+  }
+  delay(2500); // 2.5초 기다림   
+
+      for(i=0;i<800;i++)      
+  {
+    myStepper.step(-1); // 스텝모터 역회전
+    delay(10);          
+  }}
+}}
+
